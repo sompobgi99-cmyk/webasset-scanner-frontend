@@ -6,9 +6,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="app.config.js"></script>
   <script>window.ITAM_INITIAL_ASSET_ID = "";</script>
   <style>
@@ -3255,6 +3252,38 @@ try {
   =====================================================================
 */
 
+    const LAZY_SCRIPTS = {
+      konva: 'https://cdn.jsdelivr.net/npm/konva@9/konva.min.js',
+      jspdf: 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+      chart: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js',
+    };
+    const _lazyScriptPromises = {};
+
+    function loadExternalScriptOnce(key, url, isReady) {
+      if (isReady && isReady()) return Promise.resolve();
+      if (_lazyScriptPromises[key]) return _lazyScriptPromises[key];
+      _lazyScriptPromises[key] = new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-lazy-lib="' + key + '"]');
+        if (existing) {
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', () => reject(new Error('Load library failed: ' + key)), { once: true });
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+        script.dataset.lazyLib = key;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Load library failed: ' + key));
+        document.head.appendChild(script);
+      });
+      return _lazyScriptPromises[key];
+    }
+
+    const ensureKonva = () => loadExternalScriptOnce('konva', LAZY_SCRIPTS.konva, () => !!window.Konva);
+    const ensureJsPdf = () => loadExternalScriptOnce('jspdf', LAZY_SCRIPTS.jspdf, () => !!(window.jspdf && window.jspdf.jsPDF));
+    const ensureChartJs = () => loadExternalScriptOnce('chart', LAZY_SCRIPTS.chart, () => !!window.Chart);
+
     // ===== Login screen =====
     /**
      * แสดงหน้า login (ซ่อน app root) พร้อม error message ถ้ามี
@@ -3902,7 +3931,12 @@ try {
       $('deleteSystemLogoBtn').addEventListener('click', deleteSystemLogo);
       $('departmentSelect').addEventListener('change', loadMap);
       $('typeFilter').addEventListener('change', render);
-      $('searchInput').addEventListener('input', render);
+      $('searchInput').addEventListener('input', () => {
+        render();
+        if (mapSearchQuery() && state.mapData && !(state.mapData.searchAssets || []).length) {
+          ensureMapSearchAssets().then(render).catch(() => render());
+        }
+      });
       // FEATURE: ตอน filter เปลี่ยน → reset ไปหน้า 1 ด้วย
       const resetPageThenLoad = () => { state.assetPage = 1; loadAssetManagement(); };
       bindAssetFilterMenus(resetPageThenLoad);
@@ -4131,6 +4165,7 @@ try {
       // Stop camera if leaving scan view
       if (view !== 'scan' && state.scanner && state.scanner.active) stopScanner();
       if (view === 'dashboard') {
+        await ensureChartJs();
         loadDashboardData();
       }
       if (view === 'assets') {
@@ -4150,6 +4185,7 @@ try {
         ((_invData.items || []).length || (_invData.recentTx || []).length) ? renderInventory() : loadInventoryData();
       }
       if (view === 'map') {
+        await ensureKonva();
         if (!state.stage) setupStage();
         if (!state.mapData) await loadMap();
         setTimeout(() => {
@@ -4170,7 +4206,6 @@ try {
         const mapDataJson = await run('getMapDataJson', dept);
         state.mapData = typeof mapDataJson === 'string' ? JSON.parse(mapDataJson) : mapDataJson;
         if (!state.mapData) throw new Error('getMapData ไม่ได้ส่งข้อมูลกลับมา');
-        await ensureMapSearchAssets();
         hydrateCachedFloorPlanImage();
         render();
       } catch (err) {
@@ -4185,15 +4220,20 @@ try {
      */
     async function ensureMapSearchAssets() {
       if (!state.mapData || (state.mapData.searchAssets || []).length) return;
+      if (state.mapData._searchAssetsLoading) return state.mapData._searchAssetsLoading;
       try {
-        const liteJson = await run('getAssetManagementLiteJson');
-        const lite = typeof liteJson === 'string' ? JSON.parse(liteJson) : liteJson;
-        state.mapData.searchAssets = (lite && lite.assets) || [];
+        state.mapData._searchAssetsLoading = run('getAssetManagementLiteJson').then((liteJson) => {
+          const lite = typeof liteJson === 'string' ? JSON.parse(liteJson) : liteJson;
+          state.mapData.searchAssets = (lite && lite.assets) || [];
+        });
+        await state.mapData._searchAssetsLoading;
       } catch (err) {
         state.mapData.searchAssets = [
           ...(state.mapData.assets || []),
           ...(state.mapData.inventory || []),
         ];
+      } finally {
+        if (state.mapData) state.mapData._searchAssetsLoading = null;
       }
     }
 
@@ -6042,6 +6082,7 @@ try {
       button.disabled = true;
       button.textContent = 'กำลังสร้าง PDF...';
       try {
+        await ensureJsPdf();
         const jsPdf = window.jspdf && window.jspdf.jsPDF;
         if (!jsPdf) throw new Error('โหลด PDF library ไม่สำเร็จ');
         const pdf = new jsPdf({ orientation: 'landscape', unit: 'mm', format: 'a4' });
