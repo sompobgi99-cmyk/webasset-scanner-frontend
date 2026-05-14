@@ -6811,6 +6811,7 @@ try {
     // ----- Camera Scanner -----
     state.scanner = { stream: null, detector: null, active: false, manual: false, useNative: false, frameCount: 0, canvas: null };
     const SCAN_QR_PREFIX = 'BNH-ITAM-ASSET:';
+    const scanLookupCache_ = new Map();
     let scanJsQrLoadPromise_ = null;
 
     function isLikelyMobileDevice_() {
@@ -7105,14 +7106,15 @@ try {
       $('scanStatus').textContent = 'กำลังค้นหา...';
       try {
         const json = await run('findAssetByTagJson', value, {
-          logScan: true,
+          logScan: false,
           source: 'manual',
           rawValue: $('scanManualInput').value,
         });
         const data = typeof json === 'string' ? JSON.parse(json) : json;
         if (!data || !data.ok) throw new Error((data && data.error) || 'ไม่พบ asset');
+        cacheScannedAsset_(value, data.asset);
         renderScanQuickView(data.asset);
-        handleScanLogResult_(data.scanLog);
+        queueScanLog_(value, { source: 'manual', rawValue: $('scanManualInput').value });
       } catch (err) {
         $('scanStatus').textContent = err.message || String(err);
         toast(err.message || String(err));
@@ -7121,16 +7123,23 @@ try {
 
     async function showScannedAsset(assetId, scanMeta) {
       $('scanStatus').textContent = 'กำลังโหลดข้อมูลอุปกรณ์...';
+      const cachedAsset = getCachedScannedAsset_(assetId);
+      if (cachedAsset) {
+        renderScanQuickView(cachedAsset);
+        queueScanLog_(assetId, Object.assign({ source: 'qr', rawValue: assetId }, scanMeta || {}));
+        return;
+      }
       try {
         const json = await run('findAssetByTagJson', assetId, Object.assign({
-          logScan: true,
+          logScan: false,
           source: 'qr',
           rawValue: assetId,
         }, scanMeta || {}));
         const data = typeof json === 'string' ? JSON.parse(json) : json;
         if (!data || !data.ok) throw new Error((data && data.error) || 'ไม่พบ asset');
+        cacheScannedAsset_(assetId, data.asset);
         renderScanQuickView(data.asset);
-        handleScanLogResult_(data.scanLog);
+        queueScanLog_(assetId, Object.assign({ source: 'qr', rawValue: assetId }, scanMeta || {}));
       } catch (err) {
         $('scanStatus').textContent = err.message || String(err);
         $('scanResult').classList.remove('hidden');
@@ -7143,6 +7152,36 @@ try {
       if (!scanLog || scanLog.ok || scanLog.skipped) return;
       const msg = scanLog.error || 'GitHub scan log failed';
       console.warn('[ITAM] GitHub scan log failed:', msg);
+    }
+
+    function scanCacheKey_(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function cacheScannedAsset_(value, asset) {
+      if (!asset) return;
+      const keys = [value, asset.asset_tag, asset.serial_number, asset.asset_id]
+        .map(scanCacheKey_)
+        .filter(Boolean);
+      keys.forEach(key => scanLookupCache_.set(key, Object.assign({}, asset)));
+      if (scanLookupCache_.size > 200) {
+        Array.from(scanLookupCache_.keys()).slice(0, 50).forEach(key => scanLookupCache_.delete(key));
+      }
+    }
+
+    function getCachedScannedAsset_(value) {
+      return scanLookupCache_.get(scanCacheKey_(value)) || null;
+    }
+
+    function queueScanLog_(value, meta) {
+      setTimeout(() => {
+        run('logAssetScanJson', value, Object.assign({ logScan: true }, meta || {}))
+          .then((json) => {
+            const data = typeof json === 'string' ? JSON.parse(json) : json;
+            handleScanLogResult_(data);
+          })
+          .catch((err) => console.warn('[ITAM] GitHub scan log failed:', err && err.message ? err.message : err));
+      }, 0);
     }
 
     function scanStatusClass(status) {
