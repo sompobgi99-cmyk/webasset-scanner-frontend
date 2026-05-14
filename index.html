@@ -2183,20 +2183,20 @@
       <div class="scanHeader">
         <div>
           <h1>Scan QR</h1>
-          <div class="sub">กดถ่ายรูป QR แล้วระบบจะอ่านรหัสจากภาพให้อัตโนมัติ</div>
+          <div class="sub">เปิดกล้องมือถือแบบ Live Scan แล้วจ่อ QR/Barcode ให้อยู่ในกรอบ</div>
         </div>
         <div class="scanActions">
-          <button class="btn primary" id="scanCaptureBtn">📷 ถ่ายรูป QR</button>
-          <button class="btn" id="scanStartBtn">🎥 สแกน Live (Desktop)</button>
+          <button class="btn primary" id="scanStartBtn">🎥 เริ่ม Live Scan</button>
+          <button class="btn" id="scanCaptureBtn">📷 ถ่ายรูป QR</button>
           <button class="btn" id="scanStopBtn" style="display:none">หยุด</button>
           <input id="scanCaptureInput" type="file" accept="image/*" capture="environment" style="display:none">
         </div>
       </div>
       <div class="scanPhotoGuide" id="scanPhotoGuide">
-        <strong>โหมดแนะนำ:</strong> ใช้ปุ่ม <strong>📷 ถ่ายรูป QR</strong> บนมือถือ ระบบจะเปิดกล้องของเครื่องโดยตรง แล้วอ่าน QR จากรูปที่ถ่าย
+        <strong>โหมดแนะนำ:</strong> ใช้ปุ่ม <strong>🎥 เริ่ม Live Scan</strong> บนมือถือ ระบบจะเปิดกล้องต่อเนื่องแล้วอ่าน QR/Barcode ทันที
       </div>
       <div class="scanIframeNotice hidden" id="scanIframeNotice">
-        💡 <strong>หมายเหตุ:</strong> Google Apps Script จำกัดการเข้าถึงกล้องแบบ live ใน iframe จึงแนะนำให้ใช้โหมดถ่ายรูป QR
+        💡 <strong>หมายเหตุ:</strong> เมื่อเปิดผ่าน Google Apps Script iframe กล้องแบบ live อาจถูกจำกัด ให้ใช้หน้า GitHub Pages หรือใช้ปุ่มถ่ายรูป QR เป็น fallback
       </div>
       <div class="scanContainer" id="scanContainer">
         <video id="scanVideo" autoplay playsinline muted></video>
@@ -2204,7 +2204,7 @@
           <div class="scanFrame"><span></span><div class="scanLine"></div></div>
         </div>
       </div>
-      <div class="scanStatus" id="scanStatus">กดปุ่ม "📷 ถ่ายรูป QR" เพื่อเริ่มสแกน</div>
+      <div class="scanStatus" id="scanStatus">กดปุ่ม "🎥 เริ่ม Live Scan" เพื่อเริ่มสแกน</div>
       <div class="scanResult hidden" id="scanResult"></div>
       <div class="scanFallback hidden" id="scanFallback">
         <h3>ใช้กล้องไม่ได้?</h3>
@@ -4174,7 +4174,7 @@ try {
       }
       if (view === 'settings') await loadSettings();
       if (view === 'scan') {
-        $('scanStatus').textContent = 'กดปุ่ม "📷 ถ่ายรูป QR" เพื่อเริ่มสแกน';
+        $('scanStatus').textContent = 'กดปุ่ม "🎥 เริ่ม Live Scan" เพื่อเริ่มสแกน';
         $('scanResult').classList.add('hidden');
       }
       if (view === 'print-labels') {
@@ -6820,14 +6820,26 @@ try {
 
     function setupScanCaptureMode() {
       const startBtn = $('scanStartBtn');
+      const captureBtn = $('scanCaptureBtn');
+      const guide = $('scanPhotoGuide');
       const notice = $('scanIframeNotice');
       const isFramed = (() => {
         try { return window.self !== window.top; }
         catch (e) { return true; }
       })();
-      if (notice && (isFramed || isLikelyMobileDevice_())) notice.classList.remove('hidden');
-      if (startBtn && (isLikelyMobileDevice_() || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
-        startBtn.classList.add('hidden');
+      const canLiveScan = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+      if (notice) notice.classList.toggle('hidden', !isFramed);
+      if (startBtn) {
+        startBtn.classList.toggle('hidden', !canLiveScan);
+        startBtn.classList.toggle('primary', canLiveScan);
+      }
+      if (captureBtn) {
+        captureBtn.classList.toggle('primary', !canLiveScan);
+      }
+      if (guide) {
+        guide.innerHTML = canLiveScan && !isFramed
+          ? '<strong>โหมดแนะนำ:</strong> ใช้ปุ่ม <strong>🎥 เริ่ม Live Scan</strong> บนมือถือ ระบบจะเปิดกล้องต่อเนื่องแล้วอ่าน QR/Barcode ทันที'
+          : '<strong>โหมดสำรอง:</strong> ใช้ปุ่ม <strong>📷 ถ่ายรูป QR</strong> เมื่อเบราว์เซอร์หรือ iframe เปิดกล้อง live ไม่ได้';
       }
     }
 
@@ -6936,7 +6948,13 @@ try {
       } catch (err) {
         $('scanStatus').textContent = 'เปิด Live Scan ไม่สำเร็จ กรุณาใช้ปุ่ม "📷 ถ่ายรูป QR"';
         const notice = $('scanIframeNotice');
-        if (notice) notice.classList.remove('hidden');
+        if (notice) {
+          const isFramed = (() => {
+            try { return window.self !== window.top; }
+            catch (e) { return true; }
+          })();
+          notice.classList.toggle('hidden', !isFramed);
+        }
         $('scanFallback').classList.remove('hidden');
       }
     }
@@ -7059,7 +7077,7 @@ try {
       state.scanner.stream = null;
       const video = $('scanVideo');
       if (video) { video.pause(); video.srcObject = null; }
-      if (!isLikelyMobileDevice_()) $('scanStartBtn').style.display = '';
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) $('scanStartBtn').style.display = '';
       $('scanStopBtn').style.display = 'none';
     }
 
@@ -7186,9 +7204,12 @@ try {
           if (action === 'map') await viewAssetOnMap(assetId);
           if (action === 'next') {
             $('scanResult').classList.add('hidden');
-            $('scanStatus').textContent = 'กดปุ่ม "📷 ถ่ายรูป QR" เพื่อเริ่มสแกน';
-            const input = $('scanCaptureInput');
-            if (input) input.click();
+            $('scanStatus').textContent = 'กดปุ่ม "🎥 เริ่ม Live Scan" เพื่อเริ่มสแกน';
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) startScanner();
+            else {
+              const input = $('scanCaptureInput');
+              if (input) input.click();
+            }
           }
         });
       });
