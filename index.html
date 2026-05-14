@@ -4170,6 +4170,7 @@ try {
         const mapDataJson = await run('getMapDataJson', dept);
         state.mapData = typeof mapDataJson === 'string' ? JSON.parse(mapDataJson) : mapDataJson;
         if (!state.mapData) throw new Error('getMapData ไม่ได้ส่งข้อมูลกลับมา');
+        await ensureMapSearchAssets();
         hydrateCachedFloorPlanImage();
         render();
       } catch (err) {
@@ -4182,6 +4183,20 @@ try {
     /**
      * Render หน้าแผนผังหลัก: background, asset markers, lists, summary
      */
+    async function ensureMapSearchAssets() {
+      if (!state.mapData || (state.mapData.searchAssets || []).length) return;
+      try {
+        const liteJson = await run('getAssetManagementLiteJson');
+        const lite = typeof liteJson === 'string' ? JSON.parse(liteJson) : liteJson;
+        state.mapData.searchAssets = (lite && lite.assets) || [];
+      } catch (err) {
+        state.mapData.searchAssets = [
+          ...(state.mapData.assets || []),
+          ...(state.mapData.inventory || []),
+        ];
+      }
+    }
+
         function render() {
       if (!state.mapData) return;
       updateFloorPlanActionState();
@@ -4385,17 +4400,36 @@ try {
 
     /**
      * Render รายการ asset ใน side panel (placed / unplaced)
-     */
+    */
         function renderLists() {
       const inventory = (state.mapData.inventory || []).filter(matchesFilters);
-      const placedAssets = filteredAssets().filter(a => a.location);
+      const currentPlacedAssets = filteredAssets().filter(a => a.location);
+      const crossDeptAssets = mapSearchResults()
+        .filter(a => a.location && !isCurrentMapDepartment(a));
+      const placedAssets = mapSearchQuery()
+        ? [...currentPlacedAssets, ...crossDeptAssets]
+        : currentPlacedAssets;
       $('inventoryList').innerHTML = inventory.map(assetRowHtml).join('') || '<div class="sub">ไม่มีอุปกรณ์ในคลัง</div>';
       $('assetList').innerHTML = placedAssets.map(assetRowHtml).join('') || '<div class="sub">ไม่มีอุปกรณ์บนแผนผัง</div>';
       document.querySelectorAll('[data-asset]').forEach((row) => {
-        row.addEventListener('click', () => {
+        row.addEventListener('click', async () => {
           const id = row.getAttribute('data-asset');
-          const asset = [...(state.mapData.assets || []), ...(state.mapData.inventory || [])].find(a => String(a.asset_id) === id);
+          const asset = [
+            ...(state.mapData.assets || []),
+            ...(state.mapData.inventory || []),
+            ...(state.mapData.searchAssets || []),
+          ].find(a => String(a.asset_id) === id);
           if (!asset) return;
+          if (asset.location && !isCurrentMapDepartment(asset)) {
+            $('departmentSelect').value = asset.location.department;
+            await loadMap();
+            const current = [...(state.mapData.assets || []), ...(state.mapData.inventory || [])]
+              .find(a => String(a.asset_id) === id);
+            if (current) {
+              selectAsset(current);
+              return;
+            }
+          }
           if (asset.status === 'In Stock') {
             state.selectedInventory = asset;
             toast('คลิกตำแหน่งบนแผนผังเพื่อวางอุปกรณ์นี้');
@@ -6108,12 +6142,55 @@ try {
       return (state.mapData.assets || []).filter(matchesFilters);
     }
 
+    function mapSearchQuery() {
+      return $('searchInput').value.trim().toLowerCase();
+    }
+
+    function mapAssetSearchPool() {
+      const pool = state.mapData.searchAssets || [
+        ...(state.mapData.assets || []),
+        ...(state.mapData.inventory || []),
+      ];
+      const seen = new Set();
+      return pool.filter((asset) => {
+        const id = String(asset.asset_id || '');
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+    }
+
+    function mapSearchResults() {
+      const q = mapSearchQuery();
+      if (!q) return [];
+      return mapAssetSearchPool().filter(matchesFilters);
+    }
+
+    function assetMapDepartment(asset) {
+      return (asset && asset.location && asset.location.department) || (asset && asset.department) || '';
+    }
+
+    function isCurrentMapDepartment(asset) {
+      const currentDept = state.mapData.department || $('departmentSelect').value || '';
+      return String(assetMapDepartment(asset) || '') === String(currentDept || '');
+    }
+
     function matchesFilters(asset) {
-      const q = $('searchInput').value.trim().toLowerCase();
+      const q = mapSearchQuery();
       const type = $('typeFilter').value;
       if (type && asset.device_type !== type) return false;
       if (!q) return true;
-      return [asset.asset_tag, asset.computer_name, asset.serial_number, asset.brand, asset.model]
+      return [
+        asset.asset_tag,
+        asset.computer_name,
+        asset.serial_number,
+        asset.brand,
+        asset.model,
+        asset.department,
+        asset.owner,
+        asset.status,
+        assetMapDepartment(asset),
+      ]
         .some(v => String(v || '').toLowerCase().includes(q));
     }
 
