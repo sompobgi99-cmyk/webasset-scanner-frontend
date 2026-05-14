@@ -7143,7 +7143,6 @@ try {
       if (!scanLog || scanLog.ok || scanLog.skipped) return;
       const msg = scanLog.error || 'GitHub scan log failed';
       console.warn('[ITAM] GitHub scan log failed:', msg);
-      toast('บันทึก GitHub log ไม่สำเร็จ: ' + msg);
     }
 
     function scanStatusClass(status) {
