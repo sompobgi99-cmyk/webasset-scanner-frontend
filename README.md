@@ -13,3 +13,9 @@ GitHub Pages URL after publishing:
 GitHub Actions runs `node scripts/sanity-check.js` on every push to `main` before deploying Pages. The check verifies required static files, lazy module markers, GAS Web App configuration, obvious secret leaks, and bundle size budgets.
 
 For automatic deployment through the workflow, set repository **Settings > Pages > Build and deployment > Source** to **GitHub Actions**.
+
+## GitHub workflow
+
+- Issue templates are available for bugs, mobile scan problems, and feature requests.
+- Release notes can be created from **Actions > Create Release Notes** by entering a tag such as `v2026.05.27-settings-user-opt-v45`.
+- Pushing a tag that starts with `v` also creates release notes automatically.

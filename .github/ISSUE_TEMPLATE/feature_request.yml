@@ -1,0 +1,71 @@
+name: Feature request
+description: เสนอฟีเจอร์ใหม่หรือการปรับปรุงระบบ
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: ส่วนของระบบ
+      options:
+        - Asset Management
+        - แผนผัง
+        - Scan
+        - เบิก-คืน Asset
+        - Inventory
+        - Audit
+        - Dashboard
+        - Settings
+        - GitHub / Deploy
+        - Performance
+        - Security
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: ปัญหาหรือ workflow ที่อยากให้ดีขึ้น
+      placeholder: ตอนนี้ต้องทำหลายขั้นตอน / โหลดช้า / ข้อมูลที่ต้องดูยังไม่มี
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: ข้อเสนอหรือผลลัพธ์ที่ต้องการ
+      placeholder: อยากให้มีปุ่ม..., filter..., report..., dashboard...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: ความสำคัญ
+      options:
+        - สูง - กระทบงานประจำ
+        - กลาง - ช่วยลดเวลา
+        - ต่ำ - ปรับให้ใช้ง่ายขึ้น
+    validations:
+      required: true
+
+  - type: textarea
+    id: users
+    attributes:
+      label: ใครเป็นผู้ใช้หลักของฟีเจอร์นี้
+      placeholder: IT admin, staff หน้างาน, หัวหน้าแผนก, auditor
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: เงื่อนไขที่ถือว่าเสร็จ
+      placeholder: |
+        - สามารถ ...
+        - แสดง ...
+        - Export ...
+
+  - type: textarea
+    id: references
+    attributes:
+      label: ตัวอย่าง / screenshot / หมายเหตุ

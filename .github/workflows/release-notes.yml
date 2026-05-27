@@ -1,0 +1,100 @@
+name: Create Release Notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v2026.05.27-settings-user-opt-v45
+        required: true
+        type: string
+      title:
+        description: Release title
+        required: false
+        type: string
+      prerelease:
+        description: Mark as prerelease
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Generate GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.tag }}"
+            title="${{ inputs.title }}"
+            prerelease="${{ inputs.prerelease }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            title=""
+            prerelease="false"
+          fi
+
+          if [ -z "$title" ]; then
+            title="$tag"
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "title=$title" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag if needed
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          tag="${{ steps.meta.outputs.tag }}"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists"
+          else
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.meta.outputs.tag }}"
+          gh api \
+            --method POST \
+            "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="$tag" \
+            -f target_commitish="${{ github.sha }}" \
+            -q .body > release-notes.md
+
+          {
+            echo "body<<EOF"
+            cat release-notes.md
+            echo
+            echo "## Deploy verification"
+            echo "- Static frontend sanity check is enforced by GitHub Actions before Pages deploy."
+            echo "- GitHub Pages URL: https://sompobgi99-cmyk.github.io/webasset-scanner-frontend/"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.title }}
+          body: ${{ steps.notes.outputs.body }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}

@@ -1,0 +1,91 @@
+name: Mobile scan issue
+description: แจ้งปัญหา Scan QR/Barcode บนมือถือ
+title: "[Scan]: "
+labels:
+  - bug
+  - scan
+  - mobile
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ใช้ template นี้เมื่อพบปัญหาเปิดกล้อง, scan ช้า, scan แล้วข้อมูลไม่ขึ้น, หรือ feedback เสียง/สั่นผิดปกติ
+
+  - type: dropdown
+    id: scan_mode
+    attributes:
+      label: โหมด Scan ที่ใช้
+      options:
+        - Live Scan
+        - ถ่ายรูป QR
+        - กรอกเอง / Manual
+        - Audit Mode
+    validations:
+      required: true
+
+  - type: input
+    id: asset_tag
+    attributes:
+      label: Asset Tag / QR ที่สแกน
+      placeholder: BNH-IMPORT-048
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: อาการ
+      options:
+        - เปิดกล้องไม่ได้
+        - กล้องเปิดแต่ไม่อ่าน QR
+        - อ่าน QR ได้แต่โหลดข้อมูลช้า
+        - อ่าน QR ได้แต่ข้อมูลไม่ขึ้น
+        - Scan log / Audit log บันทึกไม่สำเร็จ
+        - เสียง/สั่นไม่ทำงาน
+        - หน้าจอล้น / ปุ่มกดยาก
+        - อื่น ๆ
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: ขั้นตอนที่ทำ
+      placeholder: |
+        1. เปิดผ่าน GitHub Pages
+        2. เข้าเมนู Scan
+        3. กด Live Scan
+        4. สแกน QR ...
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: รุ่นมือถือ / OS
+      placeholder: Xiaomi / Android 14, iPhone / iOS 18
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      placeholder: Chrome, Safari, Edge
+
+  - type: dropdown
+    id: network
+    attributes:
+      label: Network
+      options:
+        - Wi-Fi โรงพยาบาล
+        - 4G/5G
+        - Hotspot
+        - ไม่แน่ใจ
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot / video / error
+      description: ลากรูปหรือวิดีโอมาวางได้เลย
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: หมายเหตุเพิ่มเติม

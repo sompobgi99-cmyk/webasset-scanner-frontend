@@ -1,0 +1,78 @@
+name: Bug report
+description: แจ้งปัญหาทั่วไปของ BNH ITAM
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        กรุณาใส่ข้อมูลให้ครบที่สุด เพื่อให้แก้ปัญหาได้เร็วขึ้น
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: หน้าที่พบปัญหา
+      options:
+        - Asset Management
+        - แผนผัง
+        - Scan
+        - เบิก-คืน Asset
+        - Inventory
+        - Audit
+        - Dashboard
+        - Settings
+        - Login
+        - GitHub Pages / Deploy
+    validations:
+      required: true
+
+  - type: input
+    id: asset_tag
+    attributes:
+      label: Asset Tag / Serial / รายการที่เกี่ยวข้อง
+      placeholder: BNH-IMPORT-048 หรือ serial ที่พบปัญหา
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: สิ่งที่คาดว่าจะเกิดขึ้น
+      placeholder: ควรแสดงข้อมูล / ควรบันทึกสำเร็จ / ควรค้นหาเจอ
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: สิ่งที่เกิดขึ้นจริง
+      placeholder: อธิบาย error, หน้าจอค้าง, ข้อมูลไม่ขึ้น หรือผลลัพธ์ที่ผิด
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: ขั้นตอนการทำให้เกิดปัญหา
+      placeholder: |
+        1. เข้าเมนู ...
+        2. กด ...
+        3. เห็น ...
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / อุปกรณ์
+      placeholder: Chrome บน Windows, Chrome Android, Safari iPhone
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot หรือข้อความ error
+      description: ลากรูปมาวางได้เลย
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: หมายเหตุเพิ่มเติม
