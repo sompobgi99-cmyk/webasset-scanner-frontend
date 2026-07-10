@@ -128,7 +128,8 @@ for (const pattern of lazyExportLeaks) {
 if (!process.exitCode) pass('lazy module code stayed out of index.html');
 
 const maxSizes = {
-  'index.html': 350 * 1024,
+  // Includes the shared accessibility and responsive UI styles.
+  'index.html': 360 * 1024,
   'JS_Settings.js': 90 * 1024,
   'JS_AssetManagement.js': 90 * 1024,
   'JS_CheckoutInventory.js': 70 * 1024,
