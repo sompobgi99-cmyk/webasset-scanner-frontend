@@ -24,7 +24,14 @@ const requiredFiles = [
   'JS_Settings.js',
 ];
 
+const stagingFiles = requiredFiles.map((file) => `staging/${file}`);
+
 for (const file of requiredFiles) {
+  if (exists(file)) pass(`found ${file}`);
+  else fail(`missing ${file}`);
+}
+
+for (const file of stagingFiles) {
   if (exists(file)) pass(`found ${file}`);
   else fail(`missing ${file}`);
 }
@@ -33,8 +40,11 @@ if (process.exitCode) process.exit(process.exitCode);
 
 const index = read('index.html');
 const config = read('app.config.js');
+const stagingIndex = read('staging/index.html');
+const stagingConfig = read('staging/app.config.js');
 
 const textFiles = requiredFiles.filter((file) => file !== '.nojekyll');
+textFiles.push(...stagingFiles.filter((file) => !file.endsWith('/.nojekyll')));
 for (const file of textFiles) {
   const content = read(file);
   if (content.includes('\u0000')) fail(`${file} contains NUL bytes`);
@@ -52,6 +62,15 @@ if (!/gasApiUrl:\s*['"]https:\/\/script\.google\.com\/macros\/s\/[^'"]+\/exec['"
 } else {
   pass('GAS Web App URL configured');
 }
+
+if (!/environment:\s*['"]staging['"]/.test(stagingConfig)) {
+  fail('staging/app.config.js is not marked as staging');
+} else {
+  pass('Staging environment configured');
+}
+
+if (/<\?!=/.test(stagingIndex)) fail('staging/index.html still contains Apps Script template markers');
+else pass('no Apps Script template markers in staging/index.html');
 
 const tokenPatterns = [
   /github_pat_[A-Za-z0-9_]+/i,
@@ -101,6 +120,11 @@ for (const moduleUrl of lazyModuleUrls) {
   else fail(`index does not reference ${moduleUrl}`);
 }
 
+for (const moduleUrl of lazyModuleUrls) {
+  if (stagingIndex.includes(moduleUrl)) pass(`staging/index references ${moduleUrl}`);
+  else fail(`staging/index does not reference ${moduleUrl}`);
+}
+
 const lazyLeakChecks = [
   'openUserFormModal',
   'submitUserForm',
@@ -142,6 +166,14 @@ for (const [file, maxBytes] of Object.entries(maxSizes)) {
   const size = fs.statSync(path.join(root, file)).size;
   if (size > maxBytes) fail(`${file} is ${size} bytes, over budget ${maxBytes}`);
   else pass(`${file} size ${size}/${maxBytes}`);
+}
+
+
+for (const [file, maxBytes] of Object.entries(maxSizes)) {
+  const stagingFile = path.join('staging', file);
+  const size = fs.statSync(path.join(root, stagingFile)).size;
+  if (size > maxBytes) fail(`${stagingFile} is ${size} bytes, over budget ${maxBytes}`);
+  else pass(`${stagingFile} size ${size}/${maxBytes}`);
 }
 
 if (process.exitCode) {

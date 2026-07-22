@@ -8,6 +8,13 @@ GitHub Pages URL after publishing:
 
 `https://sompobgi99-cmyk.github.io/webasset-scanner-frontend/`
 
+Isolated Staging frontend:
+
+`https://sompobgi99-cmyk.github.io/webasset-scanner-frontend/staging/`
+
+The Staging path uses its own GAS deployment and Supabase project. Publishing
+it does not replace the files or configuration at the Production root path.
+
 ## Deploy safety
 
 GitHub Actions runs `node scripts/sanity-check.js` on every push to `main` before deploying Pages. The check verifies required static files, lazy module markers, GAS Web App configuration, obvious secret leaks, and bundle size budgets.
