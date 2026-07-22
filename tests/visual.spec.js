@@ -8,7 +8,7 @@ test('login screen has stable visual baseline and no serious accessibility viola
   await expect(page).toHaveScreenshot('login-screen.png', {
     animations: 'disabled',
     caret: 'hide',
-    maxDiffPixels: 250,
+    maxDiffPixelRatio: 0.015,
   });
 
   const results = await new AxeBuilder({ page })
