@@ -51,6 +51,7 @@ jobs:
           mkdir -p _site
           cp index.html app.config.js .nojekyll _site/
           cp JS_*.js _site/
+          cp -R vendor _site/vendor
           cp -R staging _site/staging
 
       - name: Upload Pages artifact
