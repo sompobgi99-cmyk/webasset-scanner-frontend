@@ -1,0 +1,14 @@
+{
+  "name": "bnh-itam-static-frontend-qa",
+  "private": true,
+  "scripts": {
+    "test:build-version": "node --test tests/build-version.test.cjs",
+    "test:visual": "playwright test",
+    "test:ci": "npm run test:build-version && npm run test:visual"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.52.0",
+    "http-server": "^14.1.1"
+  }
+}

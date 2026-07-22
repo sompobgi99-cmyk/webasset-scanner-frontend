@@ -23,6 +23,9 @@ For automatic deployment through the workflow, set repository **Settings > Pages
 
 ## GitHub workflow
 
+- `Regression QA` checks generated version consistency, authenticated navigation,
+  accessibility, mobile overflow, and Scan to Map on portrait and landscape phones.
+- Run the same checks locally with `npm ci` followed by `npm run test:ci`.
 - Issue templates are available for bugs, mobile scan problems, and feature requests.
 - Release notes can be created from **Actions > Create Release Notes** by entering a tag such as `v2026.05.27-settings-user-opt-v45`.
 - Pushing a tag that starts with `v` also creates release notes automatically.

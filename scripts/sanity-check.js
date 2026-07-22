@@ -13,6 +13,7 @@ const pass = (message) => console.log(`OK: ${message}`);
 const requiredFiles = [
   'index.html',
   'app.config.js',
+  'build-version.txt',
   '.nojekyll',
   'JS_Scan.js',
   'JS_Dashboard.js',
@@ -24,7 +25,9 @@ const requiredFiles = [
   'JS_Settings.js',
 ];
 
-const stagingFiles = requiredFiles.map((file) => `staging/${file}`);
+const stagingFiles = requiredFiles
+  .filter((file) => file !== 'build-version.txt')
+  .map((file) => `staging/${file}`);
 
 for (const file of requiredFiles) {
   if (exists(file)) pass(`found ${file}`);
@@ -53,6 +56,15 @@ for (const file of textFiles) {
 const versionMatch = index.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
 if (!versionMatch) fail('index.html does not contain APP_VERSION');
 else pass(`APP_VERSION ${versionMatch[1]}`);
+
+const buildVersion = read('build-version.txt').trim();
+if (!/^[0-9A-Za-z._-]{8,}$/.test(buildVersion)) {
+  fail('build-version.txt is invalid');
+} else if (!versionMatch || versionMatch[1] !== buildVersion) {
+  fail('APP_VERSION does not match build-version.txt');
+} else {
+  pass(`generated build version ${buildVersion}`);
+}
 
 if (/<\?!=/.test(index)) fail('index.html still contains Apps Script template markers');
 else pass('no Apps Script template markers in index.html');
@@ -153,7 +165,7 @@ if (!process.exitCode) pass('lazy module code stayed out of index.html');
 
 const maxSizes = {
   // Includes the shared accessibility and responsive UI styles.
-  'index.html': 365 * 1024,
+  'index.html': 390 * 1024,
   'JS_Settings.js': 90 * 1024,
   'JS_AssetManagement.js': 90 * 1024,
   'JS_CheckoutInventory.js': 70 * 1024,

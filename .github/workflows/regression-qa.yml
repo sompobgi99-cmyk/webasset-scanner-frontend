@@ -1,0 +1,52 @@
+name: Regression QA
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'index.html'
+      - 'app.config.js'
+      - 'build-version.txt'
+      - 'JS_*.js'
+      - 'vendor/**'
+      - 'tests/**'
+      - 'playwright.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/regression-qa.yml'
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'app.config.js'
+      - 'build-version.txt'
+      - 'JS_*.js'
+      - 'vendor/**'
+      - 'tests/**'
+      - 'playwright.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/regression-qa.yml'
+  workflow_dispatch:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ci
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-qa-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
