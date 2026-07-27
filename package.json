@@ -4,7 +4,8 @@
   "scripts": {
     "test:build-version": "node --test tests/build-version.test.cjs",
     "test:visual": "playwright test",
-    "test:ci": "npm run test:build-version && npm run test:visual"
+    "test:ci": "npm run test:build-version && npm run test:visual",
+    "test:staging-write": "playwright test tests/staging-write.spec.js --project=desktop-light --workers=1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
