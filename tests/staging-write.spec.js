@@ -8,10 +8,44 @@ const STAGING_GAS_API_URL =
   'https://script.google.com/macros/s/AKfycbwiSgyrenecigwM_vWGskOBW89VHANt8qDR03ABk0_rs_caS_pBPL5kgdrmZXpSpcl9/exec';
 const STAGING_USERNAME = process.env.ITAM_STAGING_USERNAME || '';
 const STAGING_PASSWORD = process.env.ITAM_STAGING_PASSWORD || '';
+const STAGING_SUPABASE_URL = 'https://xnxcwpdjptfoigtsvoyl.supabase.co';
+const STAGING_SUPABASE_PUBLISHABLE_KEY =
+  'sb_publishable_tdpG_IHZ0ksHFmwziZHxpw_fDVq8UFn';
 
 function parseResult(value) {
   if (typeof value !== 'string') return value;
   return JSON.parse(value);
+}
+
+function canonicalSupabaseEmail(username) {
+  const encoded = Buffer.from(
+    String(username || '').trim().toLowerCase(),
+    'utf8'
+  ).toString('base64url').toLowerCase();
+  return `u-${encoded}@auth.bnh-itam.example.com`;
+}
+
+async function getSupabaseAccessToken(username, password) {
+  const response = await fetch(
+    `${STAGING_SUPABASE_URL}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: STAGING_SUPABASE_PUBLISHABLE_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: canonicalSupabaseEmail(username),
+        password,
+      }),
+    }
+  );
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error_description || data.msg || data.message ||
+      `Supabase Auth HTTP ${response.status}`);
+  }
+  return data.access_token;
 }
 
 async function gasPost(apiUrl, userAgent, payload) {
@@ -43,17 +77,32 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   );
   test.setTimeout(360_000);
 
-  await page.goto(STAGING_FRONTEND_URL, { waitUntil: 'domcontentloaded' });
-  await page.locator('#loginUsername').fill(STAGING_USERNAME);
-  await page.locator('#loginPassword').fill(STAGING_PASSWORD);
-  await page.locator('#loginSubmitBtn').click();
-  await expect(page.locator('#appRoot')).not.toHaveClass(/hidden/, { timeout: 60_000 });
+  const login = async () => {
+    await page.goto(STAGING_FRONTEND_URL, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#loginForm')).toBeVisible({ timeout: 30_000 });
+    await page.locator('#loginUsername').fill(STAGING_USERNAME);
+    await page.locator('#loginPassword').fill(STAGING_PASSWORD);
+    await page.locator('#loginSubmitBtn').click();
+    await expect(page.locator('#appRoot')).not.toHaveClass(/hidden/, {
+      timeout: 60_000,
+    });
+    return page.evaluate(() => ({
+      token: sessionStorage.getItem('itam.session.token.v1'),
+      provider: document.documentElement.dataset.authProvider || '',
+    }));
+  };
+  const relogin = async () => {
+    await page.evaluate(() => sessionStorage.clear());
+    return login();
+  };
 
-  const token = await page.evaluate(() =>
-    sessionStorage.getItem('itam.session.token.v1')
-  );
+  let loginResult = await login();
+  let token = loginResult.token;
   const userAgent = await page.evaluate(() => navigator.userAgent);
   expect(token).toBeTruthy();
+  expect(await page.evaluate(() =>
+    window.ITAM_APP_CONFIG?.supabaseAuth?.enabled
+  )).toBe(true);
 
   const call = async (name, args = []) =>
     gasPost(STAGING_GAS_API_URL, userAgent, {
@@ -64,6 +113,42 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
       apiUserAgent: userAgent,
       userAgent,
     });
+
+  let authStatus = parseResult(await call('getSupabaseAuthStatusJson'));
+  if (!authStatus.jit_enabled || !authStatus.exchange_enabled) {
+    await call('setSupabaseAuthModeJson', [true, false]);
+    loginResult = await relogin();
+    token = loginResult.token;
+    expect(token).toBeTruthy();
+    await call('setSupabaseAuthModeJson', [true, true]);
+    loginResult = await relogin();
+    token = loginResult.token;
+  } else if (loginResult.provider !== 'supabase') {
+    loginResult = await relogin();
+    token = loginResult.token;
+  }
+  expect(loginResult.provider).toBe('supabase');
+
+  authStatus = parseResult(await call('getSupabaseAuthStatusJson'));
+  expect(authStatus.jit_enabled).toBe(true);
+  expect(authStatus.exchange_enabled).toBe(true);
+
+  const supabaseAccessToken = await getSupabaseAccessToken(
+    STAGING_USERNAME,
+    STAGING_PASSWORD
+  );
+  expect(supabaseAccessToken).toBeTruthy();
+  const rlsResponse = await fetch(
+    `${STAGING_SUPABASE_URL}/rest/v1/assets?select=asset_id&limit=1`,
+    {
+      headers: {
+        apikey: STAGING_SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${supabaseAccessToken}`,
+      },
+    }
+  );
+  expect(rlsResponse.status).toBe(200);
+  expect(await rlsResponse.json()).toBeInstanceOf(Array);
 
   const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
   const tag = `QA-STAGING-${stamp}`;
