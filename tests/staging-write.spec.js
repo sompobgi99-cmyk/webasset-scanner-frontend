@@ -24,6 +24,8 @@ function loginMetrics(result) {
     shellMs: result.shellMs,
     authMs: result.authMs,
     interactiveMs: result.interactiveMs,
+    serverTiming: result.serverTiming,
+    clientAuthTiming: result.clientAuthTiming,
   };
 }
 
@@ -128,6 +130,8 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
       interactiveMs: Number(
         document.documentElement.dataset.loginInteractiveMs || 0
       ),
+      serverTiming: window.state?.loginServerTiming || null,
+      clientAuthTiming: window.state?.loginClientAuthTiming || null,
     }), shellWallMs);
   };
   const relogin = async () => {
