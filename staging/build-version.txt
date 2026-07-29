@@ -1,1 +1,1 @@
-20260727-supabase-auth-staging-v143
+20260729-auth-shell-swr-v144

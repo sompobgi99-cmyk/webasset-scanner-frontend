@@ -82,14 +82,37 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
     await expect(page.locator('#loginForm')).toBeVisible({ timeout: 30_000 });
     await page.locator('#loginUsername').fill(STAGING_USERNAME);
     await page.locator('#loginPassword').fill(STAGING_PASSWORD);
+    const startedAt = Date.now();
     await page.locator('#loginSubmitBtn').click();
     await expect(page.locator('#appRoot')).not.toHaveClass(/hidden/, {
+      timeout: 2_000,
+    });
+    const shellWallMs = Date.now() - startedAt;
+    await expect.poll(
+      () => page.evaluate(() =>
+        sessionStorage.getItem('itam.session.token.v1')
+      ),
+      { timeout: 60_000 }
+    ).toBeTruthy();
+    await expect(page.locator('#appRoot')).not.toHaveClass(/authPending/, {
       timeout: 60_000,
     });
-    return page.evaluate(() => ({
+    await expect.poll(
+      () => page.evaluate(() =>
+        document.documentElement.dataset.loginAuthMs || ''
+      ),
+      { timeout: 60_000 }
+    ).not.toBe('');
+    return page.evaluate((measuredShellMs) => ({
       token: sessionStorage.getItem('itam.session.token.v1'),
       provider: document.documentElement.dataset.authProvider || '',
-    }));
+      shellWallMs: measuredShellMs,
+      shellMs: Number(document.documentElement.dataset.loginShellMs || 0),
+      authMs: Number(document.documentElement.dataset.loginAuthMs || 0),
+      interactiveMs: Number(
+        document.documentElement.dataset.loginInteractiveMs || 0
+      ),
+    }), shellWallMs);
   };
   const relogin = async () => {
     await page.evaluate(() => sessionStorage.clear());
@@ -97,6 +120,8 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   };
 
   let loginResult = await login();
+  console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginResult));
+  expect(loginResult.shellWallMs).toBeLessThan(2_000);
   let token = loginResult.token;
   const userAgent = await page.evaluate(() => navigator.userAgent);
   expect(token).toBeTruthy();
@@ -118,13 +143,16 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   if (!authStatus.jit_enabled || !authStatus.exchange_enabled) {
     await call('setSupabaseAuthModeJson', [true, false]);
     loginResult = await relogin();
+    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginResult));
     token = loginResult.token;
     expect(token).toBeTruthy();
     await call('setSupabaseAuthModeJson', [true, true]);
     loginResult = await relogin();
+    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginResult));
     token = loginResult.token;
   } else if (loginResult.provider !== 'supabase') {
     loginResult = await relogin();
+    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginResult));
     token = loginResult.token;
   }
   expect(loginResult.provider).toBe('supabase');
