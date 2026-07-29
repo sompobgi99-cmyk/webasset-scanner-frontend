@@ -17,6 +17,16 @@ function parseResult(value) {
   return JSON.parse(value);
 }
 
+function loginMetrics(result) {
+  return {
+    provider: result.provider,
+    shellWallMs: result.shellWallMs,
+    shellMs: result.shellMs,
+    authMs: result.authMs,
+    interactiveMs: result.interactiveMs,
+  };
+}
+
 function canonicalSupabaseEmail(username) {
   const encoded = Buffer.from(
     String(username || '').trim().toLowerCase(),
@@ -103,6 +113,12 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
       ),
       { timeout: 60_000 }
     ).not.toBe('');
+    await expect.poll(
+      () => page.evaluate(() =>
+        document.documentElement.dataset.loginInteractiveMs || ''
+      ),
+      { timeout: 60_000 }
+    ).not.toBe('');
     return page.evaluate((measuredShellMs) => ({
       token: sessionStorage.getItem('itam.session.token.v1'),
       provider: document.documentElement.dataset.authProvider || '',
@@ -120,7 +136,7 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   };
 
   let loginResult = await login();
-  console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginResult));
+  console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginMetrics(loginResult)));
   expect(loginResult.shellWallMs).toBeLessThan(2_000);
   let token = loginResult.token;
   const userAgent = await page.evaluate(() => navigator.userAgent);
@@ -143,16 +159,16 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   if (!authStatus.jit_enabled || !authStatus.exchange_enabled) {
     await call('setSupabaseAuthModeJson', [true, false]);
     loginResult = await relogin();
-    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginResult));
+    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginMetrics(loginResult)));
     token = loginResult.token;
     expect(token).toBeTruthy();
     await call('setSupabaseAuthModeJson', [true, true]);
     loginResult = await relogin();
-    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginResult));
+    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginMetrics(loginResult)));
     token = loginResult.token;
   } else if (loginResult.provider !== 'supabase') {
     loginResult = await relogin();
-    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginResult));
+    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginMetrics(loginResult)));
     token = loginResult.token;
   }
   expect(loginResult.provider).toBe('supabase');
