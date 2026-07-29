@@ -23,6 +23,7 @@ function loginMetrics(result) {
     shellWallMs: result.shellWallMs,
     shellMs: result.shellMs,
     authMs: result.authMs,
+    bridgeMs: result.bridgeMs,
     interactiveMs: result.interactiveMs,
     serverTiming: result.serverTiming,
     clientAuthTiming: result.clientAuthTiming,
@@ -127,6 +128,7 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
       shellWallMs: measuredShellMs,
       shellMs: Number(document.documentElement.dataset.loginShellMs || 0),
       authMs: Number(document.documentElement.dataset.loginAuthMs || 0),
+      bridgeMs: Number(document.documentElement.dataset.loginBridgeMs || 0),
       interactiveMs: Number(
         document.documentElement.dataset.loginInteractiveMs || 0
       ),
