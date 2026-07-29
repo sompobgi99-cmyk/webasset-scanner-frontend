@@ -141,9 +141,25 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
     return login();
   };
 
-  let loginResult = await login();
-  console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify(loginMetrics(loginResult)));
-  expect(loginResult.shellWallMs).toBeLessThan(2_000);
+  const loginSamples = [];
+  let loginResult = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    loginResult = attempt === 0 ? await login() : await relogin();
+    const metrics = loginMetrics(loginResult);
+    loginSamples.push(metrics.authMs);
+    console.log('[ITAM_STAGING_LOGIN] ' + JSON.stringify({
+      attempt: attempt + 1,
+      ...metrics,
+    }));
+    expect(loginResult.shellWallMs).toBeLessThan(2_000);
+  }
+  const sortedAuthSamples = loginSamples.slice().sort((a, b) => a - b);
+  const medianAuthMs = sortedAuthSamples[Math.floor(sortedAuthSamples.length / 2)];
+  console.log('[ITAM_STAGING_LOGIN_MEDIAN] ' + JSON.stringify({
+    samples: loginSamples,
+    medianAuthMs,
+  }));
+  expect(medianAuthMs).toBeLessThan(2_000);
   let token = loginResult.token;
   const userAgent = await page.evaluate(() => navigator.userAgent);
   expect(token).toBeTruthy();
