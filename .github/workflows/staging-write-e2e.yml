@@ -3,7 +3,7 @@ name: Staging Write E2E
 on:
   workflow_dispatch:
   schedule:
-    - cron: '15 22 * * 1-5'
+    - cron: '15 */6 * * *'
 
 concurrency:
   group: staging-write-e2e
