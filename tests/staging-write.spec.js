@@ -430,8 +430,8 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
     Object.entries(parity.tables || {}).filter(([, result]) =>
       result && (
         result.ok === false ||
-        result.match === false ||
-        Number(result.sheet_count || 0) !== Number(result.supabase_count || 0)
+        result.matches === false ||
+        Number(result.sheet_rows || 0) !== Number(result.supabase_rows || 0)
       )
     )
   );
