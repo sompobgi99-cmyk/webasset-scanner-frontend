@@ -11,6 +11,15 @@ const STAGING_PASSWORD = process.env.ITAM_STAGING_PASSWORD || '';
 const STAGING_SUPABASE_URL = 'https://xnxcwpdjptfoigtsvoyl.supabase.co';
 const STAGING_SUPABASE_PUBLISHABLE_KEY =
   'sb_publishable_tdpG_IHZ0ksHFmwziZHxpw_fDVq8UFn';
+const GAS_REQUEST_TIMEOUT_MS = 60_000;
+const GAS_READ_RETRY_NAMES = new Set([
+  'getAssetManagementDataJson',
+  'getAuditDataJson',
+  'getInitialDataJson',
+  'getMapDataJson',
+  'getSupabaseAuthStatusJson',
+  'getSupabasePilotStatusJson',
+]);
 
 function parseResult(value) {
   if (typeof value !== 'string') return value;
@@ -39,7 +48,7 @@ function canonicalSupabaseEmail(username) {
 }
 
 async function getSupabaseAccessToken(username, password) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${STAGING_SUPABASE_URL}/auth/v1/token?grant_type=password`,
     {
       method: 'POST',
@@ -51,7 +60,9 @@ async function getSupabaseAccessToken(username, password) {
         email: canonicalSupabaseEmail(username),
         password,
       }),
-    }
+    },
+    GAS_REQUEST_TIMEOUT_MS,
+    'Supabase Auth'
   );
   const data = await response.json();
   if (!response.ok) {
@@ -61,26 +72,74 @@ async function getSupabaseAccessToken(username, password) {
   return data.access_token;
 }
 
-async function gasPost(apiUrl, userAgent, payload) {
-  const first = await fetch(apiUrl, {
-    method: 'POST',
-    redirect: 'manual',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8',
-      'User-Agent': userAgent,
-    },
-    body: JSON.stringify(payload),
-  });
-  const location = first.headers.get('location');
-  if (!location) throw new Error(`GAS redirect missing (${first.status})`);
-  const response = await fetch(location, {
-    headers: { 'User-Agent': userAgent },
-  });
-  const data = await response.json();
-  if (!data || data.ok !== true) {
-    throw new Error((data && data.error) || 'Staging API request failed');
+async function fetchWithTimeout(url, options, timeoutMs, label) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new Error(`${label} timed out after ${timeoutMs}ms`));
+  }, timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
   }
-  return data.result;
+}
+
+async function gasPost(apiUrl, userAgent, payload, options = {}) {
+  const apiName = String(payload.apiName || payload.funcName || 'unknown');
+  const timeoutMs = Number(options.timeoutMs || GAS_REQUEST_TIMEOUT_MS);
+  const retrySafe = options.retrySafe !== undefined
+    ? Boolean(options.retrySafe)
+    : GAS_READ_RETRY_NAMES.has(apiName);
+  const maxAttempts = retrySafe ? 2 : 1;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const startedAt = Date.now();
+    try {
+      const first = await fetchWithTimeout(apiUrl, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+          'User-Agent': userAgent,
+        },
+        body: JSON.stringify(payload),
+      }, timeoutMs, `${apiName} POST`);
+      const location = first.headers.get('location');
+      if (!location) throw new Error(`GAS redirect missing (${first.status})`);
+      const response = await fetchWithTimeout(location, {
+        headers: { 'User-Agent': userAgent },
+      }, timeoutMs, `${apiName} response`);
+      const data = await response.json();
+      if (!data || data.ok !== true) {
+        throw new Error((data && data.error) || 'Staging API request failed');
+      }
+      console.log('[ITAM_STAGING_API] ' + JSON.stringify({
+        apiName,
+        attempt,
+        durationMs: Date.now() - startedAt,
+        ok: true,
+      }));
+      return data.result;
+    } catch (error) {
+      lastError = error;
+      console.log('[ITAM_STAGING_API] ' + JSON.stringify({
+        apiName,
+        attempt,
+        durationMs: Date.now() - startedAt,
+        ok: false,
+        error: String(error && error.message ? error.message : error),
+      }));
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  }
+
+  throw new Error(
+    `${apiName} failed after ${maxAttempts} attempt(s): ` +
+    String(lastError && lastError.message ? lastError.message : lastError)
+  );
 }
 
 test('Staging supports the complete Asset write lifecycle and cleans up', async ({ page }) => {
@@ -167,15 +226,16 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
     window.ITAM_APP_CONFIG?.supabaseAuth?.enabled
   )).toBe(true);
 
-  const call = async (name, args = []) =>
-    gasPost(STAGING_GAS_API_URL, userAgent, {
-      funcName: 'apiCall',
-      apiName: name,
-      token,
-      argsJson: JSON.stringify(args),
-      apiUserAgent: userAgent,
-      userAgent,
-    });
+  const call = async (name, args = [], options = {}) =>
+    test.step(`API ${name}`, () =>
+      gasPost(STAGING_GAS_API_URL, userAgent, {
+        funcName: 'apiCall',
+        apiName: name,
+        token,
+        argsJson: JSON.stringify(args),
+        apiUserAgent: userAgent,
+        userAgent,
+      }, options));
 
   let authStatus = parseResult(await call('getSupabaseAuthStatusJson'));
   if (!authStatus.jit_enabled || !authStatus.exchange_enabled) {
@@ -299,14 +359,23 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
       expect(record.ok).toBe(true);
     }
   } finally {
+    const cleanupOptions = { timeoutMs: 30_000, retrySafe: false };
     if (campaignId) {
-      await call('deleteAuditCampaignJson', [campaignId]).catch(() => {});
+      await call(
+        'deleteAuditCampaignJson',
+        [campaignId],
+        cleanupOptions
+      ).catch(() => {});
     }
     if (assetId) {
-      await call('deleteAssets', [[assetId]]).catch(() => {});
-      await call('purgeDeletedAsset', [assetId]).catch(() => {});
+      await call('deleteAssets', [[assetId]], cleanupOptions).catch(() => {});
+      await call('purgeDeletedAsset', [assetId], cleanupOptions).catch(() => {});
     }
-    await call('flushSupabaseBackupQueueJson').catch(() => {});
+    await call(
+      'flushSupabaseBackupQueueJson',
+      [],
+      cleanupOptions
+    ).catch(() => {});
   }
 
   const search = parseResult(await call('getAssetManagementDataJson', [
