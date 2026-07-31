@@ -394,6 +394,16 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   ]));
   expect(search.pagination?.total || 0).toBe(0);
 
-  const parity = parseResult(await call('getSupabasePilotStatusJson'));
+  const parity = parseResult(await call(
+    'getSupabasePilotStatusJson',
+    [],
+    { timeoutMs: 60_000, retrySafe: false }
+  ));
+  console.log('[ITAM_STAGING_PARITY] ' + JSON.stringify({
+    supabaseBatchMs: Number(parity.supabase_batch_ms || 0),
+    supabaseBatchRounds: Number(parity.supabase_batch_rounds || 0),
+    tables: Object.keys(parity.tables || {}).length,
+  }));
+  expect(parity.supabase_batch_ms).toBeLessThan(30_000);
   expect(parity.ready_for_read_pilot).toBe(true);
 });
