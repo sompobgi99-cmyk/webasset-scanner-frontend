@@ -291,6 +291,7 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   const tag = `QA-STAGING-${stamp}`;
   let assetId = '';
   let campaignId = '';
+  let backupFlush = null;
 
   try {
     const initial = parseResult(await call('getInitialDataJson'));
@@ -382,12 +383,39 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
       await call('deleteAssets', [[assetId]], cleanupOptions).catch(() => {});
       await call('purgeDeletedAsset', [assetId], cleanupOptions).catch(() => {});
     }
-    await call(
+    backupFlush = parseResult(await call(
       'flushSupabaseBackupQueueJson',
       [],
       cleanupOptions
-    ).catch(() => {});
+    ).catch(() => null));
   }
+
+  expect(backupFlush?.ok).toBe(true);
+  const backupTables = backupFlush?.tables || {};
+  console.log('[ITAM_STAGING_BACKUP] ' + JSON.stringify({
+    durationMs: Number(backupFlush?.duration_ms || 0),
+    tables: Object.fromEntries(
+      Object.entries(backupTables).map(([name, result]) => [name, {
+        mode: result.mode,
+        rows: Number(result.rows || 0),
+        deleted: Number(result.deleted || 0),
+        requestedIds: Number(result.requested_ids || 0),
+        durationMs: Number(result.duration_ms || 0),
+      }])
+    ),
+  }));
+  [
+    'Assets',
+    'Locations',
+    'AuditLogs',
+    'AuditCampaigns',
+    'AuditRecords',
+    'Assets_Archive',
+  ].forEach((tableName) => {
+    if (backupTables[tableName]) {
+      expect(backupTables[tableName].mode, tableName).toBe('rows');
+    }
+  });
 
   const search = parseResult(await call('getAssetManagementDataJson', [
     JSON.stringify({ search: tag, page: 1, page_size: 50 }),
