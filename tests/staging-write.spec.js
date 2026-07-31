@@ -412,9 +412,8 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
     'AuditRecords',
     'Assets_Archive',
   ].forEach((tableName) => {
-    if (backupTables[tableName]) {
-      expect(backupTables[tableName].mode, tableName).toBe('rows');
-    }
+    expect(backupTables[tableName], `${tableName} backup result`).toBeTruthy();
+    expect(backupTables[tableName].mode, tableName).toBe('rows');
   });
 
   const search = parseResult(await call('getAssetManagementDataJson', [
