@@ -19,6 +19,7 @@ const GAS_READ_RETRY_NAMES = new Set([
   'getMapDataJson',
   'getSupabaseAuthStatusJson',
   'getSupabasePilotStatusJson',
+  'getSupabaseSyncStatusJson',
 ]);
 
 function parseResult(value) {
@@ -258,6 +259,16 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   authStatus = parseResult(await call('getSupabaseAuthStatusJson'));
   expect(authStatus.jit_enabled).toBe(true);
   expect(authStatus.exchange_enabled).toBe(true);
+
+  let syncStatus = parseResult(await call('getSupabaseSyncStatusJson'));
+  if (!syncStatus.async_sheet_backup) {
+    const asyncBackup = parseResult(
+      await call('setSupabaseAsyncSheetBackupJson', [true])
+    );
+    expect(asyncBackup.async_sheet_backup).toBe(true);
+    syncStatus = parseResult(await call('getSupabaseSyncStatusJson'));
+  }
+  expect(syncStatus.async_sheet_backup).toBe(true);
 
   const supabaseAccessToken = await getSupabaseAccessToken(
     STAGING_USERNAME,
