@@ -421,16 +421,43 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   ]));
   expect(search.pagination?.total || 0).toBe(0);
 
-  const parity = parseResult(await call(
+  let parity = parseResult(await call(
     'getSupabasePilotStatusJson',
     [],
     { timeoutMs: 60_000, retrySafe: false }
   ));
+  const parityIssues = () => Object.fromEntries(
+    Object.entries(parity.tables || {}).filter(([, result]) =>
+      result && (
+        result.ok === false ||
+        result.match === false ||
+        Number(result.sheet_count || 0) !== Number(result.supabase_count || 0)
+      )
+    )
+  );
   console.log('[ITAM_STAGING_PARITY] ' + JSON.stringify({
     supabaseBatchMs: Number(parity.supabase_batch_ms || 0),
     supabaseBatchRounds: Number(parity.supabase_batch_rounds || 0),
     tables: Object.keys(parity.tables || {}).length,
+    ready: parity.ready_for_read_pilot === true,
+    issues: parityIssues(),
   }));
+  if (parity.ready_for_read_pilot !== true) {
+    await call(
+      'flushSupabaseBackupQueueJson',
+      [],
+      { timeoutMs: 60_000, retrySafe: false }
+    );
+    parity = parseResult(await call(
+      'getSupabasePilotStatusJson',
+      [],
+      { timeoutMs: 60_000, retrySafe: false }
+    ));
+    console.log('[ITAM_STAGING_PARITY_RETRY] ' + JSON.stringify({
+      ready: parity.ready_for_read_pilot === true,
+      issues: parityIssues(),
+    }));
+  }
   expect(parity.supabase_batch_ms).toBeLessThan(30_000);
   expect(parity.ready_for_read_pilot).toBe(true);
 });
