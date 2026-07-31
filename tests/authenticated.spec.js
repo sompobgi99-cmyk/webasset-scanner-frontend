@@ -60,3 +60,20 @@ test('asset management exposes the complete asset record', async ({ page }) => {
   await expect(page.locator('#assetDetailGrid')).toContainText('แก้ไขล่าสุด');
   await expect(page.locator('#assetDetailGrid')).toContainText('2569');
 });
+
+test('settings diagnostics renders production monitoring without overflow', async ({ page }, testInfo) => {
+  await loginWithMockApi(page);
+  const isMobile = testInfo.project.name.startsWith('mobile-');
+  await openView(page, views[3], isMobile);
+  await page.locator('[data-settings-tab="diagnostics"]').click();
+
+  await expect(page.locator('#diagProductionStatus')).toHaveText('HEALTHY', { timeout: 10_000 });
+  await expect(page.locator('#diagSupabaseProbe')).toContainText('84 ms');
+  await expect(page.locator('#diagBackupQueue')).toHaveText('ไม่มีงานค้าง');
+  await expect(page.locator('#diagSnapshotStatus')).toContainText('6 / 6');
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth + 1
+  );
+  expect(overflow).toBe(false);
+});

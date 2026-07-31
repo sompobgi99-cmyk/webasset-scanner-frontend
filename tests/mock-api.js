@@ -143,6 +143,22 @@ function resultFor(apiName) {
     getSettingsSystemDataJson: jsonResult({ systemSettings: {} }),
     getSettingsAuditTemplatesJson: jsonResult({ auditTemplates: audit.templates }),
     getSettingsTextDiagnosticsJson: jsonResult({ issue_count: 0, issues: [], status: 'ok' }),
+    getProductionMonitoringJson: jsonResult({
+      ok: true,
+      environment: 'staging',
+      generated_at: '2026-07-31T03:30:00.000Z',
+      supabase_probe: { ok: true, ms: 84, rows: 1 },
+      backup_dirty: {},
+      bootstrap_snapshots: {
+        master: { exists: true },
+        system_settings: { exists: true },
+        auth_users: { exists: true },
+        dashboard: { exists: true },
+        audit: { exists: true },
+        checkout_assets: { exists: true },
+      },
+      alerts: { last_result: { issues: [] } },
+    }),
     getMapDataJson: jsonResult({
       department: 'BNH IT', assetDepartment: '', floorKey: 'BNH IT', floorPlan: null,
       floorPlanDebug: null, assets: [asset], inventory: [], searchAssets: [asset], audit: [],
