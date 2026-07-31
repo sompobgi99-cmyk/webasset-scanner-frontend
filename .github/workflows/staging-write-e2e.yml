@@ -2,6 +2,12 @@ name: Staging Write E2E
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/staging-write-e2e.yml'
+      - 'tests/staging-write.spec.js'
   schedule:
     - cron: '15 */6 * * *'
 
