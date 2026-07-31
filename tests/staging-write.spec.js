@@ -386,7 +386,7 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
     backupFlush = parseResult(await call(
       'flushSupabaseBackupQueueJson',
       [],
-      cleanupOptions
+      { timeoutMs: 60_000, retrySafe: false }
     ).catch(() => null));
   }
 
