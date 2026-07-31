@@ -270,6 +270,34 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   }
   expect(syncStatus.async_sheet_backup).toBe(true);
 
+  let baselineParity = parseResult(await call(
+    'getSupabasePilotStatusJson',
+    [],
+    { timeoutMs: 60_000, retrySafe: false }
+  ));
+  if (baselineParity.ready_for_read_pilot !== true) {
+    const mismatchedTables = Object.entries(baselineParity.tables || {})
+      .filter(([, result]) => result && result.matches === false)
+      .map(([name]) => name);
+    console.log('[ITAM_STAGING_BASELINE] ' + JSON.stringify({
+      ready: false,
+      mismatchedTables,
+    }));
+    expect(mismatchedTables.length).toBeGreaterThan(0);
+    const baselineSeed = parseResult(await call(
+      'seedSupabaseSheetBackupJson',
+      [mismatchedTables],
+      { timeoutMs: 60_000, retrySafe: false }
+    ));
+    expect(baselineSeed.ok).toBe(true);
+    baselineParity = parseResult(await call(
+      'getSupabasePilotStatusJson',
+      [],
+      { timeoutMs: 60_000, retrySafe: false }
+    ));
+  }
+  expect(baselineParity.ready_for_read_pilot).toBe(true);
+
   const supabaseAccessToken = await getSupabaseAccessToken(
     STAGING_USERNAME,
     STAGING_PASSWORD
