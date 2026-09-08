@@ -42,18 +42,32 @@ for (const file of stagingFiles) {
 if (process.exitCode) process.exit(process.exitCode);
 
 const index = read('index.html');
+const manifest = JSON.parse(read('asset-manifest.json'));
+for (const kind of ['css', 'js']) {
+  const file = manifest[kind];
+  if (!new RegExp('^app\\.[a-f0-9]{16}\\.' + kind + '$').test(file) || !exists(file)) {
+    throw new Error('Invalid or missing ' + kind + ' bundle');
+  }
+  const hash = require('crypto').createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex').slice(0, 16);
+  if (file !== `app.${hash}.${kind}`) fail(`hash mismatch: ${file}`);
+  if (!index.includes(file)) fail(`index does not reference ${file}`);
+  const budget = (kind === 'css' ? 160 : 150) * 1024;
+  if (fs.statSync(path.join(root, file)).size > budget) fail(`${file} exceeds bundle budget ${budget}`);
+}
+const appSource = index + '\n' + read(manifest.js);
 const config = read('app.config.js');
 const stagingIndex = read('staging/index.html');
 const stagingConfig = read('staging/app.config.js');
 
 const textFiles = requiredFiles.filter((file) => file !== '.nojekyll');
+textFiles.push(manifest.css, manifest.js);
 textFiles.push(...stagingFiles.filter((file) => !file.endsWith('/.nojekyll')));
 for (const file of textFiles) {
   const content = read(file);
   if (content.includes('\u0000')) fail(`${file} contains NUL bytes`);
 }
 
-const versionMatch = index.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+const versionMatch = appSource.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
 if (!versionMatch) fail('index.html does not contain APP_VERSION');
 else pass(`APP_VERSION ${versionMatch[1]}`);
 
@@ -128,7 +142,7 @@ const lazyModuleUrls = [
 ];
 
 for (const moduleUrl of lazyModuleUrls) {
-  if (index.includes(moduleUrl)) pass(`index references ${moduleUrl}`);
+  if (appSource.includes(moduleUrl)) pass(`app references ${moduleUrl}`);
   else fail(`index does not reference ${moduleUrl}`);
 }
 
@@ -144,7 +158,7 @@ const lazyLeakChecks = [
 ];
 
 for (const marker of lazyLeakChecks) {
-  if (index.includes(marker)) fail(`lazy module marker leaked into index.html: ${marker}`);
+  if (appSource.includes(marker)) fail(`lazy module marker leaked into app: ${marker}`);
 }
 
 const lazyExportLeaks = [
@@ -159,7 +173,7 @@ const lazyExportLeaks = [
 ];
 
 for (const pattern of lazyExportLeaks) {
-  if (pattern.test(index)) fail(`lazy module export leaked into index.html: ${pattern}`);
+  if (pattern.test(appSource)) fail(`lazy module export leaked into app: ${pattern}`);
 }
 if (!process.exitCode) pass('lazy module code stayed out of index.html');
 
