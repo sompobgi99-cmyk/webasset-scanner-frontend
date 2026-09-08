@@ -149,6 +149,8 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
     'Set ITAM_STAGING_USERNAME and ITAM_STAGING_PASSWORD to run write QA.'
   );
   test.setTimeout(360_000);
+  expect(new URL(STAGING_FRONTEND_URL).pathname).toBe('/webasset-scanner-frontend/staging/');
+  expect(STAGING_GAS_API_URL).toBe('https://script.google.com/macros/s/AKfycbwiSgyrenecigwM_vWGskOBW89VHANt8qDR03ABk0_rs_caS_pBPL5kgdrmZXpSpcl9/exec');
 
   const login = async () => {
     await page.goto(STAGING_FRONTEND_URL, { waitUntil: 'domcontentloaded' });
@@ -226,6 +228,8 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   expect(await page.evaluate(() =>
     window.ITAM_APP_CONFIG?.supabaseAuth?.enabled
   )).toBe(true);
+  expect(await page.evaluate(() => window.ITAM_APP_CONFIG?.environment)).toBe('staging');
+  expect(await page.evaluate(() => window.ITAM_APP_CONFIG?.gasApiUrl)).toBe(STAGING_GAS_API_URL);
 
   const call = async (name, args = [], options = {}) =>
     test.step(`API ${name}`, () =>
@@ -400,22 +404,28 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
     }
   } finally {
     const cleanupOptions = { timeoutMs: 30_000, retrySafe: false };
+    const cleanupErrors = [];
+    const recordCleanupError = (action) => (error) => {
+      cleanupErrors.push({ action, message: String(error.message || error) });
+    };
     if (campaignId) {
       await call(
         'deleteAuditCampaignJson',
         [campaignId],
         cleanupOptions
-      ).catch(() => {});
+      ).catch(recordCleanupError('deleteAuditCampaignJson'));
     }
     if (assetId) {
-      await call('deleteAssets', [[assetId]], cleanupOptions).catch(() => {});
-      await call('purgeDeletedAsset', [assetId], cleanupOptions).catch(() => {});
+      await call('deleteAssets', [[assetId]], cleanupOptions).catch(recordCleanupError('deleteAssets'));
+      await call('purgeDeletedAsset', [assetId], cleanupOptions).catch(recordCleanupError('purgeDeletedAsset'));
     }
     backupFlush = parseResult(await call(
       'flushSupabaseBackupQueueJson',
       [],
       { timeoutMs: 60_000, retrySafe: false }
-    ).catch(() => null));
+    ).catch(recordCleanupError('flushSupabaseBackupQueueJson')));
+    console.log('[ITAM_STAGING_CLEANUP] ' + JSON.stringify({ tag, assetId, campaignId, errors: cleanupErrors }));
+    expect.soft(cleanupErrors, 'Staging fixtures must be cleaned up').toEqual([]);
   }
 
   expect(backupFlush?.ok).toBe(true);
