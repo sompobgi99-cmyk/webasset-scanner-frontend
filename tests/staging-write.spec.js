@@ -466,16 +466,18 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
       }])
     ),
   }));
-  [
+  const expectedBackupTables = [
     'Assets',
     'Locations',
     'AuditLogs',
     'AuditCampaigns',
     'AuditRecords',
     'Assets_Archive',
-  ].forEach((tableName) => {
-    expect(backupTables[tableName], `${tableName} backup result`).toBeTruthy();
-    expect(backupTables[tableName].mode, tableName).toBe('rows');
+  ];
+  expectedBackupTables.forEach((tableName) => {
+    // A scheduled worker may have drained this table before the manual flush.
+    // Missing flush output is accepted only if final per-table parity passes.
+    if (backupTables[tableName]) expect(backupTables[tableName].mode, tableName).toBe('rows');
   });
 
   const search = parseResult(await call('getAssetManagementDataJson', [
@@ -522,4 +524,10 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   }
   expect(parity.supabase_batch_ms).toBeLessThan(30_000);
   expect(parity.ready_for_read_pilot).toBe(true);
+  expectedBackupTables.forEach((tableName) => {
+    const result = parity.tables?.[tableName];
+    expect(result, `${tableName} must be included in parity`).toBeTruthy();
+    expect(result.matches, `${tableName} backup parity`).toBe(true);
+    expect(Number(result.sheet_rows), `${tableName} row count`).toBe(Number(result.supabase_rows));
+  });
 });
