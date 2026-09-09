@@ -57,10 +57,21 @@ for (const kind of ['css', 'js']) {
 const appSource = index + '\n' + read(manifest.js);
 const config = read('app.config.js');
 const stagingIndex = read('staging/index.html');
+const stagingManifest = JSON.parse(read('staging/asset-manifest.json'));
+for (const kind of ['css', 'js']) {
+  const file = stagingManifest[kind];
+  if (!new RegExp('^app\\.[a-f0-9]{16}\\.' + kind + '$').test(file)) throw new Error('Invalid staging bundle');
+  const bytes = fs.readFileSync(path.join(root, 'staging', file));
+  const hash = require('crypto').createHash('sha256').update(bytes).digest('hex').slice(0,16);
+  if (file !== `app.${hash}.${kind}` || !stagingIndex.includes(file)) fail('Staging bundle mismatch: ' + file);
+  if (bytes.length > (kind === 'css' ? 160 : 150) * 1024) fail('Staging bundle exceeds budget: ' + file);
+}
+const stagingAppSource = stagingIndex + '\n' + read('staging/' + stagingManifest.js);
 const stagingConfig = read('staging/app.config.js');
 
 const textFiles = requiredFiles.filter((file) => file !== '.nojekyll');
 textFiles.push(manifest.css, manifest.js);
+textFiles.push('staging/' + stagingManifest.css, 'staging/' + stagingManifest.js);
 textFiles.push(...stagingFiles.filter((file) => !file.endsWith('/.nojekyll')));
 for (const file of textFiles) {
   const content = read(file);
@@ -147,7 +158,7 @@ for (const moduleUrl of lazyModuleUrls) {
 }
 
 for (const moduleUrl of lazyModuleUrls) {
-  if (stagingIndex.includes(moduleUrl)) pass(`staging/index references ${moduleUrl}`);
+  if (stagingAppSource.includes(moduleUrl)) pass(`staging/app references ${moduleUrl}`);
   else fail(`staging/index does not reference ${moduleUrl}`);
 }
 

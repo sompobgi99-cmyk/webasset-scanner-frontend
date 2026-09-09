@@ -148,9 +148,14 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
     !STAGING_USERNAME || !STAGING_PASSWORD,
     'Set ITAM_STAGING_USERNAME and ITAM_STAGING_PASSWORD to run write QA.'
   );
-  test.setTimeout(360_000);
+  test.setTimeout(480_000);
   expect(new URL(STAGING_FRONTEND_URL).pathname).toBe('/webasset-scanner-frontend/staging/');
   expect(STAGING_GAS_API_URL).toBe('https://script.google.com/macros/s/AKfycbwiSgyrenecigwM_vWGskOBW89VHANt8qDR03ABk0_rs_caS_pBPL5kgdrmZXpSpcl9/exec');
+  const expectedBuild = require('node:fs').readFileSync(require('node:path').join(__dirname, '../staging/build-version.txt'), 'utf8').trim();
+  await expect.poll(async () => {
+    const response = await fetchWithTimeout(STAGING_FRONTEND_URL + 'build-version.txt?qa=' + Date.now(), {}, 15000, 'Staging build');
+    return response.ok ? (await response.text()).trim() : '';
+  }, {timeout:180000,intervals:[5000]}).toBe(expectedBuild);
 
   const login = async () => {
     await page.goto(STAGING_FRONTEND_URL, { waitUntil: 'domcontentloaded' });
@@ -263,6 +268,25 @@ test('Staging supports the complete Asset write lifecycle and cleans up', async 
   authStatus = parseResult(await call('getSupabaseAuthStatusJson'));
   expect(authStatus.jit_enabled).toBe(true);
   expect(authStatus.exchange_enabled).toBe(true);
+
+  const checkoutQuery = {page_size:50};
+  const directCheckout = await page.evaluate(async query => {
+    const start = performance.now();
+    const data = await run('getCheckoutDataJson', query);
+    return {data: typeof data === 'string' ? JSON.parse(data) : data, ms: Math.round(performance.now() - start)};
+  }, checkoutQuery);
+  expect(directCheckout.data.source).toBe('supabase_rls');
+  const gasCheckout = parseResult(await call('getCheckoutDataJson', [checkoutQuery]));
+  expect(directCheckout.data.stockPagination).toEqual(gasCheckout.stockPagination);
+  expect(directCheckout.data.borrowedPagination).toEqual(gasCheckout.borrowedPagination);
+  expect(directCheckout.data.inStock.map(a => a.asset_id)).toEqual(gasCheckout.inStock.map(a => a.asset_id));
+  expect(directCheckout.data.borrowed.map(a => a.asset_id)).toEqual(gasCheckout.borrowed.map(a => a.asset_id));
+  expect(directCheckout.data.inUseCount).toBe(gasCheckout.inUseCount);
+  console.log('[ITAM_STAGING_DIRECT_CHECKOUT] ' + JSON.stringify({ms:directCheckout.ms, rows:directCheckout.data.inStock.length}));
+  const anonymousAssets = await fetch(`${STAGING_SUPABASE_URL}/rest/v1/assets?select=asset_id&limit=1`, {
+    headers:{apikey:STAGING_SUPABASE_PUBLISHABLE_KEY},
+  });
+  expect([401,403]).toContain(anonymousAssets.status);
 
   let syncStatus = parseResult(await call('getSupabaseSyncStatusJson'));
   if (!syncStatus.async_sheet_backup) {
